@@ -1,0 +1,34 @@
+% REFERENCIAL TEÓRICO
+% ------------------- 
+% Levantamento da literatura,
+% conceitos importantes, 
+% trabalhos relacionados
+\label{chapter:referencial}
+
+O referencial teórico apresenta conceitos importantes para o projeto e trabalhos relacionados encontrados na literatura.
+
+Finalmente, considerando a complexidade dos jogos de videogame atuais, e como estes são de certa forma simuladores, vamos analisar a viabilidade de usar a arquitetura Entity-Component-System (ECS), tipicamente utilizada na produção de sistemas interativos em tempo-real (e.g. jogos MMO) [15] como base da arquitetura do simulador para SMR.
+
+O levantamento continua com técnicas de simulação, nas quais destacam-se simulação em passos e simulação de eventos discretos. A primeira técnica consiste em fazer simulações nas quais o loop de simulação é executado em intervalos de tempo bem definidos [13] . A segunda técnica consiste em processar eventos discretos espalhados por um período de tempo virtual, de forma que o sistema só é alterado como consequência do processamento de um evento [14].
+
+O levantamento da literatura vai se iniciar com uma comparação entre simuladores já estabelecidos para sistemas robóticos. Foram selecionados os simuladores Gazebo, Simbad, CoppeliaSim, MORSE, Dragonfly, Robocode e Gladiabots. Cada simulador possui características arquiteturais e objetivos próprios que serão analisados e comparados, fornecendo um arcabouço de técnicas que poderão ser utilizadas (ver Tabela 1).
+
+\section{Entity Component System}
+\label{sec:ECS}
+
+\textit{Entity Component System} (ECS) é um padrão de desenho (\textit{design pattern}) de software amplamente utilizada em jogos, tipicamente em sistemas interativos em tempo-real (e.g. jogos do tipo MMO, \textit{Massive Multiplayer Online}) \cite{wiebusch2015decoupling}. Nesse padrão, objetos da simulação são transformados em \textit{entidades}. Cada entidade nada mais é que uma coleção de \textit{componentes}. Um componente, por sua vez, armazena dados, mas tipicamente não implementa nenhuma lógica.
+
+A lógica da simulação está nos \textit{sistemas}, que modificam os dados de componentes de acordo com seu objetivo. Cada sistema age de maneira independente de outros sistemas sobre um conjunto de componentes que lhe interessa, ou seja, se uma entidade possui esse conjunto de componentes, então ela será afetada pelo sistema durante a simulação. O estado da simulação é o conjunto de estados de todos os componentes de todas as entidades presentes na simualção. Ele é alterado apenas pelos sistemas, cada um alterando uma pequena parte desse estado global.
+
+Essa organização permite grande modularização e separação de lógica entre as difrentes partes do sistema. Cada sistema (ou conjunto de sistemas) e seu conjunto de componentes associados pode ser adicionado ou remivdo do simulador conforme necessário. Por exemplo, um sistema comunicação entre diferentes robôs pode ser implementado como um componente que guarde uma fila de mensagens e pode ser adicionado à cada robô, associado à dois sistemas: um sistema que faça a entrega das mensagens de um robô para o outro, e outro sistema que processa as mensagens de cada robô. Note que se o processamento não for adequado à uma simulação, basta trocar aquele sistema por outro que seja adequado. Além disso, se alguma simulação não faz uso desse sistema de mensagens, basta removê-lo do simulador completamente, deixando a simulação mais leve.
+
+Uma outra vantagem de utilizar o padrão ECS é a flexibilidade de adicionar ou remover capacidades das entidades durante a execução da simulação. Como cada entidade é simplesmente uma coleção de componentes, é possível associar certas capacidades dos robôs (e.g. sensores, atuadores) à presença ou ausência de certos componentes naquela entidade. Por exemplo, dada a existência de um componente \texttt{camera} e um sistema associado que simule a captura de imagens, qualquer entidade que possue esse componente vai possuir a capacidade de coletar imagens via componente camera. Além disso, al simular falhas catastróficas em componentes, basta remover o componente da entidade sendo analisada.
+
+Apesar dessas vantagens, como apontado por Wiebush \cite{wiebusch2015decoupling}, o uso de ECS pode trazer complicações de compatibilidade entre sistemas desenvolvidos de maneira indepentente, como uso de componentes incompatíveis, e dificuldade em conhecer qual sistema é responsável por determinada funcionalidade e como utilizá-la. detalhes de como esses problemas foram sentidos durante o desenvolvimento do projeto e medidas tomadas para mitigá-los são discutidas no capítulo \ref{chapter:hmr_sim}.
+
+
+\section{Técnicas de Simulação}
+\label{sec:simulation_techniques}
+
+\section{Simuladores na Literatura}
+\label{sec:outros_simuladores}
