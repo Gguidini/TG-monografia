@@ -5,6 +5,7 @@
 % trabalhos relacionados
 \label{chapter:referencial}
 
+%TODO: Melhorar essa parte introdutória
 O referencial teórico apresenta conceitos importantes para o projeto e trabalhos relacionados encontrados na literatura.
 
 Finalmente, considerando a complexidade dos jogos de videogame atuais, e como estes são de certa forma simuladores, vamos analisar a viabilidade de usar a arquitetura Entity-Component-System (ECS), tipicamente utilizada na produção de sistemas interativos em tempo-real (e.g. jogos MMO) [15] como base da arquitetura do simulador para SMR.
@@ -13,10 +14,10 @@ O levantamento continua com técnicas de simulação, nas quais destacam-se simu
 
 O levantamento da literatura vai se iniciar com uma comparação entre simuladores já estabelecidos para sistemas robóticos. Foram selecionados os simuladores Gazebo, Simbad, CoppeliaSim, MORSE, Dragonfly, Robocode e Gladiabots. Cada simulador possui características arquiteturais e objetivos próprios que serão analisados e comparados, fornecendo um arcabouço de técnicas que poderão ser utilizadas (ver Tabela 1).
 
-\section{Entity Component System}
+\section{Entity-Component-System}
 \label{sec:ECS}
 
-\textit{Entity Component System} (ECS) é um padrão de desenho (\textit{design pattern}) de software amplamente utilizada em jogos, tipicamente em sistemas interativos em tempo-real (e.g. jogos do tipo MMO, \textit{Massive Multiplayer Online}) \cite{wiebusch2015decoupling}. Nesse padrão, objetos da simulação são transformados em \textit{entidades}. Cada entidade nada mais é que uma coleção de \textit{componentes}. Um componente, por sua vez, armazena dados, mas tipicamente não implementa nenhuma lógica.
+\textit{Entity-Component-System} (ECS) é um padrão de desenho (\textit{design pattern}) de software amplamente utilizada em jogos, tipicamente em sistemas interativos em tempo-real (e.g. jogos do tipo MMO, \textit{Massive Multiplayer Online}) \cite{wiebusch2015decoupling}. Nesse padrão, objetos da simulação são transformados em \textit{entidades}. Cada entidade nada mais é que uma coleção de \textit{componentes}. Um componente, por sua vez, armazena dados, mas tipicamente não implementa nenhuma lógica.
 
 A lógica da simulação está nos \textit{sistemas}, que modificam os dados de componentes de acordo com seu objetivo. Cada sistema age de maneira independente de outros sistemas sobre um conjunto de componentes que lhe interessa, ou seja, se uma entidade possui esse conjunto de componentes, então ela será afetada pelo sistema durante a simulação. O estado da simulação é o conjunto de estados de todos os componentes de todas as entidades presentes na simualção. Ele é alterado apenas pelos sistemas, cada um alterando uma pequena parte desse estado global.
 
@@ -26,9 +27,22 @@ Uma outra vantagem de utilizar o padrão ECS é a flexibilidade de adicionar ou 
 
 Apesar dessas vantagens, como apontado por Wiebush \cite{wiebusch2015decoupling}, o uso de ECS pode trazer complicações de compatibilidade entre sistemas desenvolvidos de maneira indepentente, como uso de componentes incompatíveis, e dificuldade em conhecer qual sistema é responsável por determinada funcionalidade e como utilizá-la. detalhes de como esses problemas foram sentidos durante o desenvolvimento do projeto e medidas tomadas para mitigá-los são discutidas no capítulo \ref{chapter:hmr_sim}.
 
+Foi utilizada a biblioteca \texttt{esper} para suporte do padrão ECS. Esper é uma biblioteca de ECS leve com foco em performance, escrita na linguagem Python por Benjamin Moran \cite{esper}. Ela cria uma classe \texttt{World} que mantém uma lista de entidades e de todos os componentes para cada entidade. Um componente pode ser qualquer estrutura em Python, no caso do projeto foram usadas classes (i.e. \texttt{class}). É possível ainda adicionar sistemas à classe \texttt{World}, que são implementados como funções, convencionalmente chamadas \texttt{process}. Alguns dos sistemas do projeto são adicionados ao \texttt{World}.
 
 \section{Técnicas de Simulação}
 \label{sec:simulation_techniques}
+
+Uma técnica de simulação bem estabelecida é a de tempo discreto com intervalo de incremento fixo \cite{belanger2010aboutsimulation}. Nesse modelo, o estado de um sistema no tempo $t_{i+1}$ é uma função do estado do sistema no tempo $t_i$. Cada variável que compõe o estado do sistema é uma função de variáveis e estados até o momento anterior. O incremento de tempo da simulação entre $t_i$ e $t_{i+1}$ é sempre o mesmo, e pré-definido.
+
+Se o tempo $t_{calc}$ necessário para computar o estado $t_{i+1}$ do sistema a partir do estado $t_i$ é menor do que o tempo do incremento $t_{incr}$, então a simulação será computada mais rápido do que o tempo do relógio (e.g. o tempo real); da mesma forma, se $t_{calc} > t_{incr}$, então a simulação é computada mais devagar do que o tempo do relógio. Essas situações são conhecidas como simulação \textit{offline} \cite{belanger2010aboutsimulation}, porque não há sincronia entre o tempo da simulação e o tempo do relógio. Essa é uma situação aceitável para este projeto, onde o objetivo é obter a simulação desejada no menor tempo possível.
+
+Essa técnica de simulação é indicada para simular sistemas que mudam constantemente, como por exemplo a temperatura de um ambiente ao longo do tempo, ou um sinal recebido por um sensor que trabalha a uma frequência conhecida. No entanto o  "relógio" da simulação é sincronizado, e todas as funções do estado são processadas a cada incremento de tempo, o que pode levar a cálculos desnecessários. Por exemplo, em uma simulação que involva uma função que altera temperatura de uma sala a cada 200ms, e um sensor que registra a temperatura da mesma sala com leituras a cada 100ms, a função que altera temperatura deve ser executada em todos os incrementos de tempo, que devem ser no máximo 100ms para suportar a leitura do sensor. Nesse cenário, metade das chamadas à função de alterar temperatura não afeta o estado do sistema, mas ainda tem que ser processadas.
+
+Outra técnica de simulação é por eventos discretos (DES, \textit{Discrete Event Simulation}) \cite{matloff2008desintro}. Nesse modelo uma fila de eventos é processado um por vez, e cada estado $s_{i+1}$ é o resultado de processar o evento no topo da fila sobre o estado $s_i$. Um evento $e$ possui um tempo $t$ e uma função $f$ que altera o estado, e potencialmente cria outros eventos, que serão adicionados à fila. A fila de eventos é uma fila de prioridades ordenada pelo tempo $t$ de cada evento, sendo que o tempo de cada novo evento gerado pode ser igual ou maior que o tempo do evento que o gerou (nunca menor, porque não se pode alterar o passado da simulação). O tempo da simulação corresponde ao tempo $t$ do evento atual sendo processado, e como os eventos são ordenados pelo tempo, ele só será incrementado quando todos os eventos naquele tempo foram processados.
+
+Diferentemente da simulação com intervalo de incremento fixo, onde as mesmas funções são executadas em intervalos conhecidos de tempo, na simulação do tipo DES funções diferentes alteram o estado da simulação, e o tempo da simulação no estado $s_i+1$ não depende apenas do estado $s$, mas também do evento sendo processado. Esse novo tempo pode não crescer de maneira uniforme ao longo da simulação. Essa técnica é adequada para simular sistemas que mudem de maneira infrequênte ao longo do tempo, por exemplo o inventário de um armazém \cite{belanger2010aboutsimulation}, ou a operação de robôs de serviço dentro do armazém. 
+
+A simulação de incremento fixo de tempo pode ser implementada utilizando a técnica de eventos discretos, desde que os eventos sejam criados com tempos que possuam um intervalo constante. Uma outra característica interessante que pode ser alcançada com eventos discretos é separar a função em subsistemas que são executados de maneira independente e assíncrona. Retomando o exemplo da sala que muda de temperatura e possui o sensor, cada evento de leitura do sensor pode criar o próximo evento de leitura para o tempo $t + 100ms$; de forma similar cada evento de mudança de temperatura cria um novo evento de mudança para o tempo $t + 200ms$. Dessa forma, evita-se o problema de funções de alteração do estado da simulação tendo que ser executadas antes da hora.
 
 \section{Simuladores na Literatura}
 \label{sec:outros_simuladores}
