@@ -1,3 +1,5 @@
 monografia.*
 !monografia.tex
 !monografia.pdf
+
+pdflatex*.fls
