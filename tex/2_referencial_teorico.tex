@@ -5,14 +5,100 @@
 % trabalhos relacionados
 \label{chapter:referencial}
 
-%TODO: Melhorar essa parte introdutória
-O referencial teórico apresenta conceitos importantes para o projeto e trabalhos relacionados encontrados na literatura.
+O referencial teórico apresenta conceitos importantes para o projeto e trabalhos relacionados encontrados na literatura. A Seção \ref{sec:outros_simuladores} descreve um breve levantamento feito de alguns simuladores bem estabelecidos na literatura. Esses projetos foram usados de inspiração para a criação do HMR Sim. A Seção \ref{sec:ECS} apresenta a \textit{design pattern} ECS (\textit{Entity-Compoenent-System}), analisada por ser bastante utilizada na criação de jogos, pela complexidade dos jogos de videogame atuais e como estes são de certa forma simuladores. Esta arquitetura foi utilizada no projeto do HMR Sim pelas suas vantagens. Finalmente a Seção \ref{sec:simulation_techniques} comenta sobre duas técnicas de simulação encontradas nos simuladores que foram levantados e na literatura.
 
-Finalmente, considerando a complexidade dos jogos de videogame atuais, e como estes são de certa forma simuladores, vamos analisar a viabilidade de usar a arquitetura Entity-Component-System (ECS), tipicamente utilizada na produção de sistemas interativos em tempo-real (e.g. jogos MMO) [15] como base da arquitetura do simulador para SMR.
+\section{Simuladores na Literatura}
+\label{sec:outros_simuladores}
 
-O levantamento continua com técnicas de simulação, nas quais destacam-se simulação em passos e simulação de eventos discretos. A primeira técnica consiste em fazer simulações nas quais o loop de simulação é executado em intervalos de tempo bem definidos [13] . A segunda técnica consiste em processar eventos discretos espalhados por um período de tempo virtual, de forma que o sistema só é alterado como consequência do processamento de um evento [14].
+O levantamento da literatura iniciou com um breve levantamento de simuladores já estabelecidos para sistemas robóticos. Foram selecionados os simuladores Gazebo \cite{koenig2004gazebo}, Simbad \cite{hugues2006simbad}, CoppeliaSim \cite{rohmer2013coopeliasim}, MORSE \cite{echeverria2011morse} e Dragonfly \cite{maia2019dragonfly}. Uma descrição breve de como os robôs são definidos em cada simulador é incluída, junto com um link para a documentação oficial do projeto.
 
-O levantamento da literatura vai se iniciar com uma comparação entre simuladores já estabelecidos para sistemas robóticos. Foram selecionados os simuladores Gazebo, Simbad, CoppeliaSim, MORSE, Dragonfly, Robocode e Gladiabots. Cada simulador possui características arquiteturais e objetivos próprios que serão analisados e comparados, fornecendo um arcabouço de técnicas que poderão ser utilizadas (ver Tabela 1).
+Cada um desses simuladores foi criado com propostas diferentes, desde simulação precisa das partes que compõem um robô e sua interação com o ambiente (Gazebo, CoppeliaSim, Morse), até simulações de mais alto nível focando principalmente no comportamento dos robôs (Simbad, Dragonfly). Simulações multi-robô são suportadas por simuladores atuais, mas geralmente em menor número - devido ao alto uso de recursos computacionais necessários para simular cada robô (i. e. experimentos feitos com Gazebo mostraram que o simulador tem dificuldades ao simular mais de 10 robôs \cite{noori20173d}) - ou são muito específicos quando conseguem simular mais robôs (i.e. Dragonfly supostamente é capaz de simular até 400 entidades, mas só consegue simular drones \cite{maia2019dragonfly}).
+
+\textbf{Gazebo.} Robôs são definidos em modelos, que seguem uma estrutura de arquivos definida. O robô em si é descrito em arquivos .sdf. Cada modelo é definido através de uma série de <links> que definem as partes do modelo. Sensores ou outros componentes - outros modelos - podem ser ligados através de <joints>. Modelos podem ter plug-ins com funcionalidade extra. O projeto é open source e pode acessado no link \url{http://gazebosim.org}. 
+
+\textbf{CoppeliaSim.} Modelos são definidos como uma seleção de scene objects (e.g. joints, shapes, sensors, cameras, paths, etc). Existem muitas maneiras de controlar uma simulação, dentre elas destaca-se embedded scripts. Esse scripts podem ser definidos como parte de um scene object e executam alguma funcionalidade relacionada à este objeto. CoppeliaSim (antigamente V-Rep) é uma solução comercial da empresa Coppelia Robotics, disponível no link \url{https://www.coppeliarobotics.com/features}.
+
+\textbf{MORSE.} Robôs são plataformas que definem o formato e certas propriedades, como área de colisão massa, etc. É nessas plataformas que sensores e atuadores são montados. Estes são fornecidos pelo simulador MORSE para serem adicionados à robôs. Apenas sensores e atuadores interagem com o mundo real com alguma funcionalidade. Os sensores e atuadores são fornecidos em diversos níveis de realismo, permitindo maior ou menor grau de abstração na simulação. MORSE é uma solução open source, baseado no software de modelagem Blender. Infelizmente o projeto se encontra abandonado desde 2020, mas ainda está disponível no link \url{https://morse-simulator.github.io}.
+
+\textbf{Simbad.} Robôs são definidos em classes Java que estendem a classe \texttt{Agent}. Sensores são adicionados como atributos da classe. Status e movimentação do robô é alcançado através de APIs próprias. Robôs implementam as funções \texttt{initBehavior()} e \texttt{performBehavior()}, que definem o que acontece com o robô ao ser criado e o comportamento dele em cada loop de simulação. Um projeto open source disponível no link \url{http://simbad.sourceforge.net}.
+
+\textbf{Dragonfly.} Drones possuem uma classe de controle - \texttt{DroneKeyboardController} ou \texttt{DroneAutomaticController}, respectivamente para ser controlado pelo usuário ou automaticamente. E classes que definem seus comportamentos, através de modelos. Além disso outras configurações, como nível de bateria, consumo por bloco, alvo e os wrappers (para fornecer comportamento adaptativo)  podem ser alterados pela interface gráfica, para cada drone na cena. Esse simulador está limitado à simuações de drones. Também open source, disponível em \url{https://github.com/DragonflyDrone/Dragonfly}.
+
+Cada simulador possui características arquiteturais e objetivos próprios que foram analisados e comparados, fornecendo um arcabouço de técnicas que podem ser utilizadas (ver Tabela \ref{table:simulators_comparison}). Pontos relevantes que foram investigados sobre os simuladores incluem: 
+
+\begin{itemize}
+    \item \textbf{Nível de Abstração.} Pode ser \emph{baixo} indicando grande detalhamento dos componentes que compõe o robô e suas características físicas; \emph{médio} indicando necessidade de detalhamento dos movimentos individuais dos componentes que formam um robô; \emph{alto} indicando abstração dos componentes do robô.
+    \item \textbf{Número de robôs} que o simulador é capaz de simular num tempo razoável
+    \item Se o simulador é \textbf{genérico} ou não, ou seja, se existe restrição no tipo de robôs que o simulador é capaz de simular.
+    \item \textbf{Arquitetura} utilizada na representação do robô (i.e. um robô é uma classe que deve ser implementada, ou um arquivo XML, etc)
+    \item \textbf{Tipo de simulação} indica qual a técnica de simulação usada, em passos ou de eventos discretos (ver Seção \ref{sec:simulation_techniques})
+\end{itemize}
+
+\begin{table}[]
+    \hspace{-0.8cm}
+    \begin{tabular}{rccccc}
+
+    \multirow{2}{25mm}{\textbf{Simulador}}      &
+    \textbf{Nível de}                           &
+    \multirow{2}{25mm}{\textbf{Nº de robôs}}    &
+    \multirow{2}{25mm}{\textbf{Genérico}}       &
+    \multirow{2}{25mm}{\textbf{Arquitetura}}    &
+    \textbf{Tipo de}                            \\
+    
+                                    &
+    \textbf{Abstração\Bstrut}       &
+                                    &
+                                    &
+                                    &
+    \textbf{Simulação\Bstrut}       \\
+
+    \midrule
+
+    {\textbf{Gazebo}\Tstrut} &
+        {Baixo} &
+        {\textless 20} &
+        {SIM} &
+        {Declarativa} &
+        {Passos/DES} \\
+        
+    {\textbf{CoppeliaSim}\Tstrut} &
+        {Baixo} &
+        {\textless 20} &
+        {SIM} &
+        {Declarativa} &
+        {Passos/DES} \\
+        
+    {\textbf{Simbad}\Tstrut} &
+        {Médio} &
+        {\textless 10} &
+        {SIM} &
+        {OOP} &
+        {Passos} \\
+        
+    {\textbf{MORSE}\Tstrut} &
+        {Médio/Alto} &
+        {20 - 100} &
+        {SIM} &
+        {OOP/Declarativa} &
+        {Passos} \\
+        
+    {\textbf{Dragonfly}\Tstrut} &
+        {Alto} &
+        {400} &
+        {NÃO} &
+        {MVC/AOP} &
+        {Passos} \\
+        
+%     % {\textbf{HMR Sim*}} &
+%     %     {\begin{tabular}[c]{@{}c@{}}Médio /\\ Alto\end{tabular}} &
+%     %     {50 - 500} &
+%     %     {SIM} &
+%     %     {\begin{tabular}[c]{@{}c@{}}ECS/\\ Declarativa\end{tabular}} &
+%     %     {\begin{tabular}[c]{@{}c@{}}Passos /\\ DES\end{tabular}}
+    \end{tabular}
+    \caption{Comparação resumida das ferramentas com suporte de simulação multi-robôs.}
+    \label{table:simulators_comparison}
+\end{table}
 
 \section{Entity-Component-System}
 \label{sec:ECS}
@@ -44,5 +130,6 @@ Diferentemente da simulação com intervalo de incremento fixo, onde as mesmas f
 
 A simulação de incremento fixo de tempo pode ser implementada utilizando a técnica de eventos discretos, desde que os eventos sejam criados com tempos que possuam um intervalo constante. Uma outra característica interessante que pode ser alcançada com eventos discretos é separar a função em subsistemas que são executados de maneira independente e assíncrona. Retomando o exemplo da sala que muda de temperatura e possui o sensor, cada evento de leitura do sensor pode criar o próximo evento de leitura para o tempo $t + 100ms$; de forma similar cada evento de mudança de temperatura cria um novo evento de mudança para o tempo $t + 200ms$. Dessa forma, evita-se o problema de funções de alteração do estado da simulação tendo que ser executadas antes da hora.
 
-\section{Simuladores na Literatura}
-\label{sec:outros_simuladores}
+O simulador utiliza a técnica de simulação de eventos discretos, através da biblioteca \texttt{simpy} \cite{simpy}. Esse framework de simulação DES é baseado em processos e faz todo o gerenciamento dos eventos e sua execução. A simulação acontece dentro de um ambiente, onde diversos processos interagem entre si e com o ambiente através de eventos. QUalquer função geradora em Python pode ser um process no simpy.
+
+Esse framework também tem suporte para recursos (\textit{Resources}), que são compartilhados entre os processos. Recursos podem simular desde recursos a serem disputados (i.e. uma impressora, uma estação de carga) até recursos que são armazenados em contâiners (i.e. 10L de aguá de um reservatório com capacidade para 10000L). Recursos podem ainda ser preemptivos, ou filtrados de algum contâiner. Essa última capacidade foi bastante utilizada para a comunicação entre sistemas do simulador, como será discutido no Capítulo \ref{3_HMR_sim}.
