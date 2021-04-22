@@ -2,7 +2,7 @@
 
 Conforme comentado no Capítulo \ref{chapter:intro}, a proposta deste projeto é fornecer uma ferramenta direcionada para simulação de sistemas multi-robôs auto-adaptativo com baixo nível de detalhamento físico. Essa porposta foi realizada através do simulador HMR Sim. É um projeto \textit{open source}, disponível em \url{https://github.com/lesunb/HMRSsim}.
 
-A linguagem escolhida foi Python, uma linguagem de programação popular e bastante versátil. Outros simuladores analisados têm suporte para essa linguagem, como MORSE e CoppeliaSim. Arquitetura do simulador é baseado na \textit{design pattern} Entity-Component-System (ECS), e a técnica de simulação é de eventos discretos. Grande foco foi dado para modularização e reaproveitamento de sistemas na construção do simulador. Alguns dos principais sistemas (e.g. Navegação, Script) foram construídos para serem fácilmente extensíveis. Além disso foi dado atenção à facilidade e rapidez de construir simulações. A arquitetura do simulador é detalhada na Seção \ref{sec:architecture}. A criação e uso de sistemas, e os principais sistemas construídos são apresentados na Seção \ref{sec:systems}.
+A linguagem escolhida foi Python, uma linguagem de programação popular e versátil. Outros simuladores analisados têm suporte para essa linguagem, como MORSE e CoppeliaSim. Arquitetura do simulador é baseado na \textit{design pattern} Entity-Component-System (ECS), e a técnica de simulação é de eventos discretos. Grande foco foi dado para modularização e reaproveitamento de sistemas na construção do simulador. Alguns dos principais sistemas (e.g. Navegação, Script) foram construídos para serem extensíveis. Além disso foi dado atenção à facilidade e rapidez de construir simulações. A arquitetura do simulador é detalhada na Seção \ref{sec:architecture}. A criação e uso de sistemas na Seção \ref{sec:systems}. Os principais sistemas já construídos são apresentados na Seção \ref{sec:systems_available}, incluindo o sistema que permite visualização da simulação, Seer. Finalmente a Seção \ref{sec:performance} verifica o desempenho do simulador numa simulação com grande número de robôs.
 
 Uma simulação no HMR Sim tem dois estágios: (1) fase de carregamento, onde os componentes disponíveis são carregados e as entidades da simulação criadas e (2) fase de execução, onde os sistemas da simulação são inicializados e a simulação em si é executada. Componentes são definidos como classes em Python e são carregados automaticamete utilizando um sistema de nomenclatura apropriado. Sistemas são construídos como funções Python, e podem ser processos da biblioteca \texttt{simpy} ou funções aceitas como sistemas do \texttt{esper} (ver Seções \ref{sec:simulation_techniques} e \ref{sec:ECS} para detalhes sobre as bibliotecas). Os sistemas devem ser inicializados e adicionados ao simulador antes da fase de execução. A Seção \ref{sec:ents_and_components} cobre a criação de componentes e como eles ficam disponíveis no simulador.
 
@@ -121,5 +121,92 @@ Esses tipo de sistema é indicado para simular comportamentos inconstantes ou im
 \section{Sistemas Disponíveis}
 \label{sec:systems_available}
 
+Alguns sistemas considerados críticos foram implementados no desenvolvimento desse projeto. Eles serviram parcialmente como validação das decisões tomadas ao longo do projeto. Ao longo do seu desenvolvimento foi dado foto na modularização e extensibilidade, como evidenciado principalmente nos sistemas de controle de entidades e navegação. Todos os sistemas que serão citados nas próximas seções (Seções \ref{sec:movement} até \ref{sec:seer}) foram testados com simulações que estão disponíveis nos exemplos do projeto (\url{https://github.com/lesunb/HMRSsim}).
+
+\subsection{Sistema de Movimentação e Colisão}
+\label{sec:movement}
+
+O sistema de movimentação é intimamente relacionado ao sistema de colisão. Ambos foram modelados como sistemas compatíveis à biblioteca \texttt{esper}. Os componentes que habilitam esses sistemas são posição, velocidade e uma caixa de colisão (\texttt{Collidable}). Esses sistemas dão suporte para simulações 2D apenas, para uma simulação 3D outros sistemas precisam ser implementados.
+
+Convenciona-se que apenas o sistema de movimentação modifica o componente posição das entidades. Outros sistemas que queiram movimentar uma entidade devem adicionar velocidade à ela, através do componente de velocidade. Isso permite que o sistema de movimentação seja leve, levando em média 0.003s para movimentar 200 entidades na simulação do enxame de drones (detalhes na Seção \ref{sec:performance}). O sistema de movimentação também é responsáver por dividir o espaço da simulação em setores, para aumentar a eficiência do sistema de colisão. O tamanho do setor pode ser alterado na inicialização do sistema de movimentação.
+
+O sistema de colisão verifica colisão entre entidades que se mexem (i.e. possuem os componentes \texttt{Position}, \texttt{Collidable} e \texttt{Velocity}) e outras entidades da simulação que tenham uma posição e o componente \texttt{Collidable}. Por questões de desempenho apenas formas côncavas são utiliadas, porém é possível definir múltiplas formas para a mesma entidade, aproximando assim um formato convexo. Como mencionado anteriormente, é feita uma separação da simulação em setores, assim o sistema de colisão só verifica colisão de uma entidade com as entidades no mesmo setor e em setores adjacentes na simulação, aumentando a eficiência do sistema em simulações com muitas entidades. Na simulação do enxame de drones, esse sistema apresentou uma média de 0.097s à 0.085s para verificar a colisão das 200 entidades. A diferença ocorre porque em diferentes momentos da simulação as entidades estão mais próximas ou mais separadas, evidenciado que a separação da simulação em setores afeta diretamente o desempenho desse sistema.
+
+Quando uma colisão é detectada, um evento de colisão é adicionado à fila de eventos (i.e. \texttt{EVENT\_STORE}), com os IDs das entidades que colidiram. Um outro sistema deve ser implementado para tomar a resposta apropriada em relação a esse evento, preferencialmente um sistema DES reativo. \texttt{simulator/systems/StopCollisionDESProcessor} é um exemplo de sistema que pode ser utilizado.
+
+\subsection{Sistema de Navegação}
+\label{sec:navigation}
+
+O sistema de navegação foi construído para permitir que robôs encontrem caminhos até pontos do mapa por conta própria. Esse sistema funciona em conjunto com o sistema de caminhos, que é baseado em caminhos que o robõ deve seguir (componente \texttt{Path}). Existem duas maneiras de comandar um robô até um ponto específico do mapa: passando uma coordenada do mapa, ou definindo um ponto de interesse (POI) no mapa (ver figura \ref{fig:navigation_map}, os pontos vermelhos), e passando a tag identificadora desse POI para o robô. Esse comando é feito através de eventos na fila de eventos.
+
+É esperado ainda que a entidade do ambiente (entidade 1) tenha um componente \texttt{Map}, o mapa de caminhos que será compartilhado por todos os robôs, e que caminhos tenham sido definidos no mapa, utilizando entidades do tipo \texttt{map-path} (ver figura \ref{fig:navigation_map}, as setas). Esses caminhos são considerados percursos seguros que os robôs podem seguir para se movimentar ao longo do mapa. Durante a criação da simulação, os \texttt{map-paths} são transformados em um grafo armazenado no componente \texttt{Map} do ambiente. Pontos próximo são combinados em "super-pontos" para diminuir a quantidade de nós no grafo, aumentando a eficiência das buscas. O tamanho de um super-ponto pode ser definido na inicialização do componente \texttt{Map}.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=.8\textwidth]{img/map_poi_test.png}
+    \caption{Mapa representando POIs (pontos vermelhos) e \texttt{map-paths} (setas) para o sistema de navegação}
+    \label{fig:navigation_map}
+\end{figure}
+
+Ao inicializar o sistema de navegação, uma função de navegação deve ser informada. Essa função recebe como parâmetros o mapa do ambiente, a posição atual do robô e sua posição de destino, e deve retornar um caminho (\texttt{Path}) da origem até o destino através dos caminhos seguros do mapa. É permitido que os robôs saiam dos caminhos seguros dentro de um limite que pode ser configurado no componente \texttt{Map}. A função \texttt{find\_route} (\texttt{simulator/systemas/NavigationSystem}) pode ser usada como função que encontra caminhos.
+
+% TODO: Adicionar referência ao projeto do gazebo que usa esse sistema de caminhos
+Encontrado um caminho do ponto de origem ao ponto de destino, o componente \texttt{Path} que representa esse caminho a ser seguido é adicionado à entidade. A partir desse ponto o sistema de caminhos (\texttt{PathProcessor}) se encarrega de adicionar velocidade ao robô para que passe por todos os pontos do caminho. Ao chegar no destino, o componente é removido. Caso um caminho não seja encontrado, um evento de erro é adicionado à fila de eventos, para que o controlador do robô (que passou o comando de movimentação) possa tomar a decisão apropriada.
+
+A simulação \texttt{poi\_test} (ver figura \ref{fig:navigation_map}) foi feita para testar o sistema de navegação. Nessa simulação um robô (o quadrado) recebe instruções para ir a alguns POIs (os círculos) em sequência, utilizando o sistema de navegação. Ele segue os caminhos definidos no mapa (as setas). 
+
+Toda vez que uma entidade encontra um caminho até um objetivo, esse caminho encontrado (que pode passar por pontos ainda não mapeados) é incluído ao mapa compartilhado, na tentativa de expandi-lo. Assim, quanto mais as entidades navegam pelo mapa, mais pontos conhecem e mais pontos podem acessar.
+
+\subsection{Sistema de Controle}
+\label{sec:scripting}
+
+O sistema de controle (ou sistema de script) foi criado para facilitar o controle e passagem de instruções às entidades da simulação. Ele é especialmente indicado para criar o equivalente a NPCs (\textit{non playable characters}) numa simulação, ou seja, entidades que precisam se movimentar de alguma forma, mas não são o foco da simulação. Esse sistema foi feito para ser extensível por outros sistemas, e funciona baseado em instruções. Na figura \ref{fig:example_annotations}, um dos componentes do robô é \texttt{component\_Script}, que é o componente utilizado pelo sistema de controle. O vetor de strings passados para esse componente é a sequência de instruções que ele vai realizar na simulação, gerenciadas pelo sistema de controle. Esse sistema é reativo e reage à eventos anotados como funções ou como eventos de interesse.
+
+Uma instrução pode ser definida por qualquer sistema, e incluída no sistema de script durante sua inicialização. Elas são implementadas através de funções que aceitem argumentos específicos (detalhes na documentação do projeto), e cujo retorno é o estado do script daquela entidade ao executar a instrução. Por exemplo, na figura \ref{fig:example_annotations} a função \texttt{Go} foi definida pelo sistema de navegação, e as funções \texttt{Grab} e \texttt{Drop} pelo sistema da garra (um atuador que será discutido na Seção \ref{sec:robot_skills}).
+
+Existem 3 estados que um script pode estar ao longo da simulação: \texttt{READY}, \texttt{BLOCKED} ou \texttt{DONE}. \texttt{DONE} significa que todas as instruções do script foram executadas. \texttt{READY} indica que a entidade está pronta para executar a próxima instrução. \texttt{BLOCKED} sinaliza que a entidade está executando alguma ação do script, ou esperando que algo aconteça para poder executar a próxima instrução. Para dar suporte às ações asíncronas, existe uma lista de eventos que o script espera. Toda vez que uma instrução asíncrona é executada, espera-se que o retorno seja o estado \texttt{BLOCKED}, e que tenham sido adicionadas ao componente de script as tags dos eventos que marcam o final da ação sendo executada. O sistema de controle é ativado ao receber um evento com alguma dessas tags, e vai removendo elas da lista de espera do script da entidade apropriada. Quando essa lista fica vazia a entidade é desbloquada (i.e. passa do estado \texttt{BLOCKED} para o estado \texttt{READY}).
+
+Por exemplo, se a entidade $2$ vai executar a instrução \texttt{Go poi}. Essa instrução pode emitir um evento para o sistema de navegação movimentar a entidade $2$ até a coordenada do ponto de interesse "poi". Quando o robô chegar até o ponto de destino, nesse sistema, é emitido um evento \texttt{EndOfPath}. Nesse caso, a função que implementa a instrução \texttt{Go} deve adicionar o evento \texttt{EndOfPath} na lista de espera do script da entidade $2$ e retornar o estado \texttt{BLOCKED}. Passado algum tempo, a entidade $2$ vai chegar até o seu destino, o evento \texttt{EndOfPath} será emitido e capturado pelo sistema de controle, esse evento será removido da lista de espera do script, deixando-a vazia e indicando que a entidade $2$ pode executar a próxima instrução.
+
+Esse sistema de controle foi testado nas simulações \texttt{poi\_test} e \texttt{hospital\_scenario}, com instruções implementadas por diferentes sistemas. O sistema de controle em si só necessita do componente \texttt{Script} e dos eventos para funcionar. Ele desconhece a implementação das instruções passadas em sua inicialização, o que permite grande flexibilidade ao sistema.
+
+O sistema de controle também é capaz de tratar erros. Isso é feito passando um dicionário \texttt{error\_handlers} ao componente \texttt{Script} de uma entidade. Esse dicionário possui tags de erros como chaves e uma ação a ser realizada como valor. Ao receber um erro, o sistema de controle verifica se existe uma ação para aquele erro e a executa caso exista. Se não existir ele tenta realizar uma ação genérica (e.g. panic!) que pode ser configurada. Esse comportamento de tratamento de erros foi testado na simulação \texttt{poi\_test}, onde uma das instruções não retorna um caminho completo até o destino, apenas um caminho parcial que é seguido. É esperado que um sistema que implemente instruções implemente também as ações a serem realizadas em caso de erro da sua instrução e as adicione ao dicionário de erros.
+
+\subsection{Sensores e Atuadores}
+\label{sec:robot_skills}
+
 \subsection{Seer}
 \label{sec:seer}
+
+Até o momento não foi mencionado como extrair informações da simulação, e particularmente como visualizar a simulação. Visto que a construção de uma simulação utilizando um diagrama é predominantemente visual, é esperado que a visualização da mesma seja: (1) semelhante ao mapa construído e (2) tão intruitiva quanto construir a simulação. Isso é suportado através do sistema Seer, implementado como um sistema DES. Essa decisão foi tomada para permitir que o simulador seja executado sem qualquer visualização gráfica, por ser uma operação custosa durante a execução da simulação.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{img/seer_architecture.png}
+    \caption{Esquema da arquitetura do sistema Seer}
+    \label{fig:seer_architecture}
+\end{figure}
+
+Seer é um sistema opcional como qualquer outro. A figura \ref{fig:seer_architecture} mostra um esquema da arquitetura desse sistema, feito para ser extensível. Ele utiliza os componentes \texttt{Position} e \texttt{Skeleton}, esse segundo sendo utilizado para guardar o estilo das entidades no XML do mapa. A cada evento do Seer (ilustrados na figura \ref{fig:seer_architecture} pelos espaços marcados com 'S' na fila de eventos) o sistema escaneias as entidades e cria uma mensagem que representa uma "fotografia" (e.g. \textit{snapshot}) da simulação naquele ponto. A frequência com que o Seer tira essas fotografias é especificado na inicialização do sistema. 
+
+Criada a mensagem representando o estado da simulação em um ponto ela é colocada numa fila de mensagens. O gerenciador dos consumidores, que executa numa thread separada do simulador, remove as mensagens dessa fila e as passa para uma lista de consumidores. Esses consumidores são funções que vão processar as mensagens, e possivelmente enviá-las para outros locais de armazenamento, como mostrado na figura. Os consumidores são passados para o Seer no momento de sua inicialização, e podem ser criados para atender às necessidades particulares do usuário. 
+
+Um consumidor de destaque, representado na figura pelo caminho que vai até o Firebase e está conectado ao browser é o consumidor do firebase. Esse consumidor utiliza o banco de dados em tempo real do firebase para enviar as mensagens ao firebase. Um programa auxiliar que faz a tradução das mensagens no firebase e reconstroi a simulação é disponibilizado no endereço \url{https://seer-firebase.netlify.app}. Ele tem suporte a múltiplas simulações, e também permite visualizar os logs da simulação (ver figura \ref{fig:dullens_big_contribution}). A visualização da simulação em si utiliza a mesma biblioteca \texttt{jGraph} que a construção do mapa, para manter o máximo de compatibilidade, e pode ser executada passo a passo ou em sequência como um vídeo. As mensagens ficam salvas no banco de dados do Firebase e podem ser vistas depois, permitindo analises posteriores à simulação sem a necessidade de re-executar a simulação toda, um processo que pode ser custoso e demorado. 
+
+Outro sistema que exemplifica a possibilidade de extrair informações da simulação é o sistema \texttt{ClockSystem}, que registra o tempo gasto para simular 1 segundo da simulação e guarda essa informação em um arquivo externo.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}[b]{0.4\textwidth}
+        \includegraphics[width=\textwidth]{img/seer_simulation.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.5\textwidth}
+        \includegraphics[width=\textwidth]{img/seer_logs.png}
+    \end{subfigure}
+    \caption{Visualizador do Seer disponível em \url{https://seer-firebase.netlify.app}}
+    \label{fig:dullens_big_contribution}
+\end{figure}
+
+\section{Desempenho}
+\label{sec:performance}
