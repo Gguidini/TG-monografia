@@ -175,6 +175,12 @@ O sistema de controle também é capaz de tratar erros. Isso é feito passando u
 \subsection{Sensores e Atuadores}
 \label{sec:robot_skills}
 
+Sistemas que representam sensores e atuadores conferem diferentes habilidades à entidades da simulação. Atuadores podem abstrair componentes inteiros do robô (e.g. garras, plataformas, pinças, etc) e podem ser modulados através de sistemas DES reativos, que reagem à comandos. Sensores por outro lado por terem um comportamento mais constante podem ser também aproximados por sistemas normais. A construção desses sistemas é feita de acordo com requisitos das habilidades do robô, portanto os sistemas implementados e testados são mais como provas de conceito.
+
+Um sistema genérico de sensores foi desenvolvido (\texttt{SensorSystem}). Ele pode ser inicializado com uma frequência e um tipo de sensor (um componente) que tenha uma área de atuação (\texttt{sensor\_range}) e um canal para receber eventos (\texttt{reply\_channel}, um \texttt{simpy.Store}). A ideia é que para cada tipo de sensor dentro da simulação, uma instância desse sistema seria adicionada ao ambiente de simulação, e seria responsável por capturar todas as entidades dentro da área do sensor e enviá-las através de um evento para o sensor de cada entidade através do canal do sensor. Isso abstrai a fase de captura de dados. Um sistema extra que implemente o sensor em si - processamento dos dados e envio de informações - ainda deve ser construído.
+
+Atuadores são mais específicos. A simulação \texttt{hospital\_scenario} implementa um atuador garra, capaz de pegar objetos iterativos e deixá-los em algum outro lugar. Objetos são marcados como interativos com uma anotação no mapa. Para auxiliar o processo de pegar e deixar objetos, que nessa simulação efetivamente remove a entidade interativa da simulação e depois a reconstroi em outro local do mapa, o sistema de gerenciamento de objetos pode ser usado (\texttt{ManageObjects}). O sistema da garra foi usado também para testar a criação de instruções para o sistema de controle, exportando duas instruções.
+
 \subsection{Seer}
 \label{sec:seer}
 
@@ -210,3 +216,87 @@ Outro sistema que exemplifica a possibilidade de extrair informações da simula
 
 \section{Desempenho}
 \label{sec:performance}
+
+Um dos objetivos desse projeto é ter um simulador capaz de simular grandes times de robôs (50-200) de maneira eficiente. Para medir o desempenho do simulador nessas condições foi utilizada uma simulação de enxame de drones, aumentando a quantidade de drones de 20 até 200, e marcando quanto tempo demorou o tempo de processamento de 1 segundo da simulação ao longo da simulação. 
+
+A simulação pode ser descrita da seguinte maneira: “Um controlador que conhece configuração para os drones tomarem. Temos uma quantidade grande de drones disponíveis. O controlador decide qual posição na configuração cada drone deve tomar e informa o drone qual sua posição. Cada drone deve tentar movimentar-se até a posição alvo sem bater nos outros drones. Ao chegar em sua posição, deve informar ao controlador e manter sua posição. Se ele bater em outro drone no caminho deve informar ao controlador. O controlador espera a resposta de todos os drones, ou um tempo máximo de 15s antes de encerrar a simulação".
+
+Essa simulação foi construída programaticamente. A posição inicial e a posição final dos drones na simulação com 80 drones é mostrada na figura \ref{fig:drone_swarm}. Essa simulação pode ser vista pelo visualizador do Seer no usuário "simulator".
+
+\begin{figure}
+    \centering
+    \begin{subfigure}[b]{0.4\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/drone_swarm_init.png}
+        \subcaption{Configuração inicial}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.4\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/drone_swarm_end.png}
+        \subcaption{Configuração final}
+    \end{subfigure}
+    \caption{Configurações inicial e final do enxame com 80 drones}
+    \label{fig:drone_swarm}
+\end{figure}
+
+A tabela \ref{table:performance} mostra um resumo do desempenho do simulador com quantidades diferentes de drones. Tempo simulado é o tempo total da simulação, tempo mínimo e máximo são o menor e maior tempo do relógio necessário para computar 1s de simulação. Média é a média total em segundos do tempo do relógio para se computar 1s de simulação. A diferença no tempo necessário para computar um segundo de simulação está relacionado à posição dos drones ao longo da simulação. Nessa simulação, com 80 drones o tempo da simulação está aproximadamente sincronizado com o tempo do relógio.
+
+\begin{table}
+    \begin{tabular}{ccccccc}
+        \toprule
+        Nº de Drones &  Tempo Simulado &  Min. tempo 1s &  Max. tempo 1s &  Média \\
+        \midrule
+        20  &                8s &       0.0979s &       0.1778s &  0.1414s \\
+        40  &               10s &       0.2700s &       0.3969s &  0.3458s \\
+        60  &               20s &       0.4404s &       0.8829s &  0.6042s \\
+        80  &               23s &       0.6978s &       1.3350s &  0.9698s \\
+        100 &               22s &       0.9491s &       2.3663s &  1.4146s \\
+        150 &               25s &       1.7435s &       3.0516s &  2.3176s \\
+        200 &               32s &       3.1433s &       4.4711s &  3.7685s \\
+        \bottomrule
+    \end{tabular}
+    \caption{Desempenho do simulador na simulação de enxame de drones por número de drones}
+    \label{table:performance} 
+\end{table}
+
+A figura \ref{fig:time_process_across} mostra amédia de tempo de relógio necessário para computar 1s de simulação em função da quantidade de drones simulados. Fazendo a aproximação da função do gráfico com regressão quadrática obtemos a função $0.0001x^2+0.0087x-0.0641$, com média de erro relativo de 4.57\%. Usando regressão de expoente o resultado é $0.0018x^{1.4322}$, com erro relativo de 4.23\%. Isso indica que o aumento de entidades nessa simulação acarreta um aumento do tempo da simulação de forma polinomial, com um coeficiente próximo de 2.
+
+A figura \ref{fig:drone_times} mostra como a média de tempo de relógio necessário para computar 1s de simulação muda ao longo da simulação, com números diferentes de drones. É possível observar que independente da natureza dos drones, existe uma tendência de aumento do tempo médio até um pico e depois uma queda até o final da simulação. Isso acontece devido à natureza da simulação. Inicialmente todos os drones estão a uma distância constante (veja figura \ref{fig:drone_swarm}), conforme o controlador assinala posições aos drones eles começam a se movimentar na direção do centro do mapa e ficam mais próximos uns dos outros (ver figura \ref{fig:time_peak}), causando um aumento no tempo de processamento (principalmente devido ao sistema de colisão). Conforme os drones chegam nas suas posições (ver figura \ref{fig:drone_swarm}) o número de entidades ativamente se movendo diminui, e com isso o tempo de processamento médio também. Isso indica que a natureza da simulação afeta diretamente o desempenho do simulador.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{img/time_process_1s_across_simulations.png}
+    \caption{Tempo para processar 1s de simulação por número de drones}
+    \label{fig:time_process_across}
+\end{figure}
+
+
+\begin{figure}
+    \centering
+    \begin{subfigure}[b]{0.4\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/time_process_1s_simulation_40drones.png}
+        \subcaption{40 drones}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.4\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/time_process_1s_simulation_100drones.png}
+        \subcaption{100 drones}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.5\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/time_process_1s_simulation_200drones.png}
+        \subcaption{200 drones}
+    \end{subfigure}
+    \caption{Tempo médio para computar 1s de simulação ao longo da simulação com 40, 100 e 200 drones}
+    \label{fig:drone_times}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=.8\textwidth]{img/swarm_peak.png}
+    \caption{Drones próximos uns dos outros ao longo da simulação. Pontos verdes são drones pairando em sua posição. Pontos amarelos são drones movendo-se para sua posição }
+    \label{fig:time_peak}
+\end{figure}
